@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="選股平台">
 <meta name="theme-color" content="#f7f7f5">
+<meta http-equiv="Cache-Control" content="no-cache">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.json">
 <title>選股平台</title>
@@ -117,6 +118,7 @@
     <button class="ghost" id="bLook">查詢</button>
   </div>
   <div class="sub" id="sub"></div>
+  <div class="small" id="ver" style="text-align:right;margin-top:-6px"></div>
   <div class="status" id="status"></div>
   <nav class="tabs"><button class="on" data-t="1">持股與大盤</button><button data-t="2">智選股</button><button data-t="3">每日新聞</button></nav>
   <div id="main"></div>
@@ -156,6 +158,7 @@
 
 <script>
 "use strict";
+const APP_VER = "2026.11.12-3";
 const API = "https://api.finmindtrade.com/api/v4/data";
 const DEF_COND = { "均線天數": 20, "顯示均線": [5, 10, 20, 60], "RSI短": 5, "RSI長": 10, "K天數": 5, "D天數": 5, "外資連買天數": 3, "融資比較天數": 5, "必要條件": ["RSI", "KD", "均線"] };
 const NEED_KEYS = [["均線", "站上均線"], ["RSI", "RSI 短>長"], ["KD", "K>D"], ["外資", "外資連買"], ["融資", "融資減少"]];
@@ -756,6 +759,7 @@ async function loadNews() {
 }
 
 /* ---------- 啟動 ---------- */
+$("ver").textContent = "App 版本 " + APP_VER;
 const last = store.get("lastData", null);
 if (last) render(last);
 else document.getElementById("main").innerHTML = `<div class="empty"><b>第一次使用</b><br>1. 按右上角「設定」，貼上 FinMind token。<br>2. 在「匯入／匯出設定碼」貼上設定碼並按「匯入」，或自己輸入觀察股。<br>3. 按「儲存」就會開始抓資料。<br><br>之後打開會先顯示上次的結果，按「更新」抓最新資料。</div>`;
