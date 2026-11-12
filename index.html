@@ -158,7 +158,7 @@
 
 <script>
 "use strict";
-const APP_VER = "2026.11.12-4";
+const APP_VER = "2026.11.12-5";
 const API = "https://api.finmindtrade.com/api/v4/data";
 const DEF_COND = { "均線天數": 20, "顯示均線": [5, 10, 20, 60], "RSI短": 5, "RSI長": 10, "K天數": 5, "D天數": 5, "外資連買天數": 3, "融資比較天數": 5, "必要條件": ["RSI", "KD", "均線"] };
 const NEED_KEYS = [["均線", "站上均線"], ["RSI", "RSI 短>長"], ["KD", "K>D"], ["外資", "外資連買"], ["融資", "融資減少"]];
@@ -263,8 +263,11 @@ function levels(prices, c, mas, nWin = 120, sw = 3) {
     const mi = items.filter(x => x.ma);
     return { ctr, zlo, zhi, score, labs, ma: mi.length ? mi[0].ma : null, maDown: mi.length > 0 && mi.every(x => x.down) };
   });
-  const out = z => ({ price: r2(z.ctr), lo: r2(z.zlo), hi: r2(z.zhi), label: z.labs[0], with: z.labs.slice(1, 4), dist: Math.round((z.ctr - cl) / cl * 1000) / 10,
-    ma: z.ma, maDown: z.maDown, score: Math.round(z.score * 10) / 10, stars: z.score >= 6 ? 3 : z.score >= 3.5 ? 2 : 1 });
+  // 星等依這檔股票自己所有價格帶的強度排名：前 15% ★★★、前 40% ★★、其餘 ★
+  const sc = Z.map(z => z.score).sort((a, b) => b - a), rank = v => sc.findIndex(x => x <= v) / Math.max(1, sc.length - 1);
+  const dp = cl >= 1000 ? 0 : cl >= 100 ? 1 : 2, rd = v => +v.toFixed(dp);
+  const out = z => ({ price: rd(z.ctr), lo: rd(z.zlo), hi: rd(z.zhi), label: z.labs[0], with: z.labs.slice(1, 4), dist: Math.round((z.ctr - cl) / cl * 1000) / 10,
+    ma: z.ma, maDown: z.maDown, score: Math.round(z.score * 10) / 10, stars: rank(z.score) <= 0.15 ? 3 : rank(z.score) <= 0.4 ? 2 : 1 });
   const adj = z => z.score * Math.exp(-Math.abs(z.ctr - cl) / cl / 0.08);
   const best = arr => arr.length ? arr.reduce((a, b) => adj(b) > adj(a) ? b : a) : null;
   const up = Z.filter(z => z.zlo > cl * 1.002), dn = Z.filter(z => z.zhi < cl * 0.998);
