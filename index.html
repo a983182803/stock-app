@@ -51,6 +51,38 @@
   .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; }
   canvas { width:100%; display:block; }
   .note { color:var(--mute); font-size:12px; margin-top:16px; line-height:1.6; }
+  .addbar { display:flex; gap:6px; margin:4px 0 6px; flex-wrap:wrap; }
+  .addbar input { width:auto; flex:1 1 88px; min-width:0; padding:9px 10px; font-size:16px; }
+  .addbar input#aId { flex:2 1 120px; }
+  .addbar button { flex:0 0 auto; }
+  .panel .pbar { display:flex; align-items:center; gap:8px; }
+  .panel .pbar h2 { flex:1; }
+  .panel .pbar button { padding:6px 10px; font-size:13px; }
+  .tabs { display:flex; gap:6px; margin:8px 0 2px; position:sticky; top:0; z-index:5; background:var(--bg); padding:6px 0; }
+  .tabs button { flex:1; background:#e9ebe8; color:var(--ink); padding:9px 6px; font-size:15px; }
+  .tabs button.on { background:var(--dark); color:#fff; }
+  .plan { margin:6px 0 2px; padding:0; list-style:none; }
+  .plan li { padding:7px 0; border-top:1px solid var(--line); font-size:14px; line-height:1.5; }
+  .plan li:first-child { border-top:0; }
+  .plan b { display:inline-block; min-width:5.5em; }
+  .plan .px { font-weight:700; font-variant-numeric:tabular-nums; margin-right:6px; }
+  details.hc { background:var(--card); border-radius:12px; padding:10px 14px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  details.hc summary { cursor:pointer; font-size:15px; list-style:none; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  details.hc summary::-webkit-details-marker { display:none; }
+  details.hc summary::after { content:"▾"; margin-left:auto; color:var(--mute); }
+  details.hc[open] summary::after { content:"▴"; }
+  .pick { background:var(--card); border-radius:12px; padding:14px 16px; margin-top:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .pick .hd { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .pick .hd .nm { font-size:18px; font-weight:700; }
+  .tag { display:inline-block; background:#eef2f5; border-radius:6px; padding:2px 7px; margin:2px 3px 2px 0; font-size:12px; }
+  .tag.no { background:#f3f3f1; color:#a3a8aa; text-decoration:line-through; }
+  .pick .act { display:flex; gap:8px; margin-top:10px; } .pick .act button { flex:1; padding:9px; }
+  .news { background:var(--card); border-radius:12px; padding:14px 16px; margin-top:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); font-size:15px; line-height:1.65; }
+  .news h1, .news h2 { font-size:17px; margin:12px 0 6px; } .news h3 { font-size:15px; margin:10px 0 4px; }
+  .news table { white-space:normal; font-size:13px; } .news th, .news td { padding:6px 8px; font-size:13px; }
+  .news .tw { box-shadow:none; border:1px solid var(--line); }
+  .news ul, .news ol { padding-left:20px; margin:6px 0; } .news a { color:#2f5d8a; }
+  .newslist button { margin:4px 4px 0 0; padding:6px 10px; font-size:13px; }
   .status { background:#fff7e0; border-radius:10px; padding:10px 12px; font-size:14px; margin:10px 0; display:none; }
   .status.err { background:#fde8e6; color:#9b2c24; }
   .empty { background:var(--card); border-radius:12px; padding:22px 18px; margin-top:14px; line-height:1.7; }
@@ -77,9 +109,19 @@
     <button class="ghost" id="bSet">設定</button>
     <button id="bRun">更新</button>
   </header>
+  <div class="addbar">
+    <input id="aId" placeholder="輸入股號，如 2454" inputmode="text" autocomplete="off" autocapitalize="characters">
+    <input id="aSh" placeholder="股數（選填）" inputmode="numeric">
+    <input id="aCo" placeholder="成本（選填）" inputmode="decimal">
+    <button id="bAdd">加入</button>
+    <button class="ghost" id="bLook">查詢</button>
+  </div>
   <div class="sub" id="sub"></div>
   <div class="status" id="status"></div>
+  <nav class="tabs"><button class="on" data-t="1">持股與大盤</button><button data-t="2">智選股</button><button data-t="3">每日新聞</button></nav>
   <div id="main"></div>
+  <div id="tab2" style="display:none"></div>
+  <div id="tab3" style="display:none"></div>
 </div>
 
 <div class="sheet" id="sheet"><div class="box">
@@ -169,24 +211,31 @@ function kd(h, l, c, n) {
   }
   return [ks, ds];
 }
+const MANAME = { 5: "5日線", 10: "10日線", 20: "月線", 60: "季線", 120: "半年線", 240: "年線" };
 function levels(prices, c, mas, nWin = 60, sw = 3) {
   const P = prices.slice(-nWin), hs = P.map(r => r.max), ls = P.map(r => r.min), dts = P.map(r => r.date), cl = c[c.length - 1];
   const cand = [];
-  for (const [n, v] of Object.entries(mas)) if (v.length && v[v.length - 1] != null) cand.push([v[v.length - 1], "MA" + n]);
-  cand.push([Math.max(...hs.slice(-20)), "20日高"], [Math.min(...ls.slice(-20)), "20日低"], [Math.max(...hs), "60日高"], [Math.min(...ls), "60日低"]);
+  for (const [n, v] of Object.entries(mas)) if (v.length && v[v.length - 1] != null) {
+    const L = v.length - 1, down = L >= 5 && v[L - 5] != null && v[L] < v[L - 5];
+    cand.push([v[L], MANAME[n] || "MA" + n, { ma: +n, down }]);
+  }
+  cand.push([Math.max(...hs.slice(-20)), "20日高", {}], [Math.min(...ls.slice(-20)), "20日低", {}], [Math.max(...hs), "60日高", {}], [Math.min(...ls), "60日低", {}]);
   for (let i = sw; i < hs.length - sw; i++) {
     const md = dts[i].slice(5).replace("-", "/");
-    if (hs[i] === Math.max(...hs.slice(i - sw, i + sw + 1))) cand.push([hs[i], "前高 " + md]);
-    if (ls[i] === Math.min(...ls.slice(i - sw, i + sw + 1))) cand.push([ls[i], "前低 " + md]);
+    if (hs[i] === Math.max(...hs.slice(i - sw, i + sw + 1))) cand.push([hs[i], "前高 " + md, {}]);
+    if (ls[i] === Math.min(...ls.slice(i - sw, i + sw + 1))) cand.push([ls[i], "前低 " + md, {}]);
   }
   const pick = (items, desc) => {
     const out = [];
-    items.sort((a, b) => desc ? b[0] - a[0] : a[0] - b[0]).forEach(([v, lab]) => {
+    items.sort((a, b) => desc ? b[0] - a[0] : a[0] - b[0]).forEach(([v, lab, meta]) => {
       if (out.length >= 2) return;
       if (out.length && Math.abs(v - out[out.length - 1][0]) / cl < 0.01) return;
-      out.push([r2(v), lab]);
+      // 與它相差 1.5% 以內的其他價位＝重疊壓力／支撐
+      const near = items.filter(o => o[1] !== lab && Math.abs(o[0] - v) / v < 0.015);
+      out.push([r2(v), lab, meta, near]);
     });
-    return out.map(([v, lab]) => ({ price: v, label: lab, dist: Math.round((v - cl) / cl * 1000) / 10 }));
+    return out.map(([v, lab, meta, near]) => ({ price: v, label: lab, dist: Math.round((v - cl) / cl * 1000) / 10,
+      ma: meta.ma || null, down: !!meta.down, with: near.map(o => o[1]), maDown: near.filter(o => o[2] && o[2].ma).every(o => o[2].down) && (!meta.ma || meta.down) }));
   };
   return [pick(cand.filter(x => x[0] > cl * 1.002), false), pick(cand.filter(x => x[0] < cl * 0.998), true)];
 }
@@ -206,6 +255,29 @@ function signals(c, ma5, rs, ks, ds, res) {
   if (res.length && res[0].dist <= 2) out.push(["weak", `接近壓力 ${res[0].price}`]);
   return out;
 }
+function rng(p) { const step = p >= 1000 ? 5 : p >= 500 ? 1 : p >= 100 ? 0.5 : p >= 50 ? 0.1 : 0.05, lo = Math.floor(p / step) * step, hi = lo + step * (p >= 100 ? 4 : 3);
+  const f = v => +v.toFixed(step < 0.1 ? 2 : step < 1 ? 1 : 0); return `${fmt(f(lo))}～${fmt(f(hi))}`; }
+function levelWhy(l) {
+  const mas = [l.label, ...l.with].filter(x => /線$/.test(x)), others = [l.label, ...l.with].filter(x => !/線$/.test(x));
+  let t = mas.length >= 2 ? `${mas.join("與")}重疊` : mas.length ? mas[0] : others[0];
+  if (mas.length && l.maDown) t += mas.length >= 2 ? "且都在下彎" : "（下彎中）";
+  if (mas.length && others.length) t += `，靠近${others[0]}`;
+  return t;
+}
+function sellPlan(r, prices, ma5) {
+  const out = [], L = prices.length - 1, low = prices[L].min, m5 = ma5[L], cl = r.close;
+  const [r1, r2_] = r.res;
+  if (r1) out.push(["第一賣點", rng(r1.price), `${levelWhy(r1)}壓力，短線可先減碼一部分。`]);
+  else out.push(["第一賣點", "—", "股價在近 60 日高點之上，上方暫無明顯壓力，可改用 5 日線作為移動停利。"]);
+  if (r2_) { const strong = r2_.with.length >= 1 || (r1 && r2_.with.length >= r1.with.length);
+    out.push(["第二賣點", rng(r2_.price), `${levelWhy(r2_)}，${strong ? "是這波反彈較強的壓力區" : "為第二道壓力"}。`]); }
+  const def = [];
+  if (low < cl * 0.999) def.push(`跌破 ${fmt(low)}（今日低點）先減碼`);
+  if (m5 != null && m5 < cl) def.push(`跌破 ${fmt(m5)}（5 日線）代表反彈結束、短線轉弱`);
+  else if (r.sup[0]) def.push(`已在 5 日線之下；再跌破 ${fmt(r.sup[0].price)}（${r.sup[0].label}）代表短線轉弱`);
+  if (def.length) out.push(["停損／防守", "", def.join("；") + "。"]);
+  return out;
+}
 function revenueInfo(rev) {
   const by = {}; rev.forEach(r => by[r.revenue_year * 100 + r.revenue_month] = r.revenue);
   const keys = Object.keys(by).map(Number); if (!keys.length) return null;
@@ -222,7 +294,7 @@ function epsInfo(fin) {
 function analyze(sid, name, prices, inst, margin, rev, fin, C, hold) {
   prices = prices.filter(r => r.close).sort((a, b) => a.date < b.date ? -1 : 1);
   const c = prices.map(r => r.close), h = prices.map(r => r.max), l = prices.map(r => r.min);
-  const mas = {}; [...new Set([...C["顯示均線"], C["均線天數"], 5])].forEach(n => mas[n] = sma(c, n));
+  const mas = {}; [...new Set([...C["顯示均線"], C["均線天數"], 5, 120, 240])].forEach(n => mas[n] = sma(c, n));
   const ma = mas[C["均線天數"]], rS = rsi(c, C["RSI短"]), rL = rsi(c, C["RSI長"]);
   const kS = kd(h, l, c, C["K天數"])[0], dL = kd(h, l, c, C["D天數"])[1];
   const fd = {};
@@ -237,9 +309,9 @@ function analyze(sid, name, prices, inst, margin, rev, fin, C, hold) {
   const ok = { "RSI": rs != null && rl != null && rs > rl, "KD": kk != null && dd != null && kk > dd, "均線": cl != null && m20 != null && cl > m20,
     "外資": lastF.length === nb && lastF.every(v => v > 0), "融資": mchg != null && mchg < 0 };
   const need = C["必要條件"], W = 60;
-  const [res, sup] = levels(prices, c, Object.fromEntries(C["顯示均線"].map(n => [n, mas[n]])));
+  const [res, sup] = levels(prices, c, Object.fromEntries([...new Set([...C["顯示均線"], 120, 240])].map(n => [n, mas[n]])));
   const ma_lines = {}; C["顯示均線"].forEach(n => ma_lines[n] = mas[n].slice(-W));
-  return {
+  const R = {
     id: sid, name, date: last(prices) ? last(prices).date : "", close: cl, chg: c.length > 1 ? r2(c[c.length - 1] - c[c.length - 2]) : 0,
     ma: m20, rsi_s: rs, rsi_l: rl, k: kk, d: dd, foreign: lastF, margin_chg: mchg,
     rev: revenueInfo(rev), eps: epsInfo(fin), ok, need, pass: need.every(x => ok[x]), score: need.filter(x => ok[x]).length,
@@ -247,8 +319,24 @@ function analyze(sid, name, prices, inst, margin, rev, fin, C, hold) {
     rsi_lines: [rS.slice(-W), rL.slice(-W)], kd_lines: [kS.slice(-W), dL.slice(-W)],
     f_series: fdates.slice(-W).map(d => [d, Math.round(fd[d])]), chip_date: last(fdates) || "",
     res, sup, signals: signals(c, mas[5], rS, kS, dL, res),
+    trend: trendInfo(c, mas, rS, rL, kS, dL),
     holding: hold ? { shares: hold.shares, cost: hold.cost, ret: hold.cost ? r2((cl - hold.cost) / hold.cost * 100) : null } : null,
   };
+  R.plan = prices.length ? sellPlan(R, prices, mas[5]) : [];
+  return R;
+}
+function trendInfo(c, mas, rS, rL, kS, dL) {
+  const L = c.length - 1, at = (a, i) => a && a[i] != null ? a[i] : null;
+  const m5 = at(mas[5], L), m20 = at(mas[20], L), m60 = at(mas[60], L), m20p = at(mas[20], L - 5), m60p = at(mas[60], L - 5);
+  const ret20 = L >= 20 ? Math.round((c[L] / c[L - 20] - 1) * 1000) / 10 : null, k = at(kS, L);
+  const checks = [
+    ["站上月線", m20 != null && c[L] > m20], ["月線在季線之上", m20 != null && m60 != null && m20 > m60],
+    ["月線上揚", m20 != null && m20p != null && m20 > m20p], ["季線上揚", m60 != null && m60p != null && m60 > m60p],
+    ["站上 5 日線", m5 != null && c[L] > m5], ["RSI 短>長", at(rS, L) != null && at(rL, L) != null && rS[L] > rL[L]],
+    ["K>D", k != null && at(dL, L) != null && k > dL[L]], ["20 日漲幅 0～25%", ret20 != null && ret20 > 0 && ret20 < 25],
+    ["K 值未過熱", k != null && k < 85]];
+  const core = checks[0][1] && checks[1][1] && checks[2][1];
+  return { score: checks.filter(x => x[1]).length, core, ret20, checks };
 }
 async function marketChips(start) {
   const [inst, mg, fu] = await Promise.all([
@@ -272,36 +360,88 @@ async function lookupNames(ids) {
   const miss = ids.filter(id => !S.names[id]); if (!miss.length) return;
   try { (await fetchDS("TaiwanStockInfo", "", "2000-01-01")).forEach(r => { if (!S.names[r.stock_id]) S.names[r.stock_id] = r.stock_name; }); store.set("settings", S); } catch (e) {}
 }
+async function fetchStock(x, C) {
+  const start = ago(400);
+  const [p, i, m, rv, fn] = await Promise.all([
+    fetchDS("TaiwanStockPrice", x.id, start), fetchDS("TaiwanStockInstitutionalInvestorsBuySell", x.id, start),
+    fetchDS("TaiwanStockMarginPurchaseShortSale", x.id, start), fetchDS("TaiwanStockMonthRevenue", x.id, ago(450)),
+    fetchDS("TaiwanStockFinancialStatements", x.id, ago(800))]);
+  if (!p.length) return null;
+  return analyze(x.id, S.names[x.id] || x.id, p, i, m, rv, fn, C, x.shares || x.cost ? { shares: x.shares, cost: x.cost } : null);
+}
+const sortResults = rs => rs.sort((a, b) => b.score - a.score || Object.values(b.ok).filter(Boolean).length - Object.values(a.ok).filter(Boolean).length);
+function stamp() { const n = new Date(), p = v => String(v).padStart(2, "0"); return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`; }
+function currentData() { return store.get("lastData", null) || { results: [], market: { indexes: [], chips: null }, cond: S.cond, updated: stamp() }; }
+async function checkId(raw) {
+  const id = (raw || "").trim().toUpperCase();
+  if (!/^[0-9A-Z]{4,6}$/.test(id)) { setStatus("股號格式不對，請輸入 4～6 碼，例如 2454 或 00878。", true); return null; }
+  if (!S.token) { openSheet(); setStatus("請先在設定貼上 FinMind token。", true); return null; }
+  setStatus(`查詢 ${id}…`);
+  await lookupNames([id]);
+  if (!S.names[id]) { setStatus(`找不到股號 ${id}，請確認是否輸入正確。`, true); return null; }
+  return id;
+}
+async function addStock(id, shares, cost) {
+  id = await checkId(id); if (!id) return;
+  const ex = S.list.find(x => x.id === id);
+  if (ex) { if (shares) ex.shares = shares; if (cost) ex.cost = cost; }
+  else S.list.push({ id, shares: shares || null, cost: cost || null });
+  store.set("settings", S);
+  try {
+    setStatus(`抓取 ${id} ${S.names[id]} 的資料…`);
+    const r = await fetchStock(S.list.find(x => x.id === id), S.cond);
+    if (!r) { setStatus(`${id} 沒有股價資料。`, true); return; }
+    const D = currentData(); D.results = sortResults(D.results.filter(x => x.id !== id).concat([r])); D.cond = S.cond;
+    store.set("lastData", D); render(D); showStock(id);
+    setStatus(ex ? `已更新 ${id} ${r.name}。` : `已加入 ${id} ${r.name}。`);
+  } catch (e) { setStatus(`抓取失敗：${e.message}`, true); }
+}
+async function lookStock(id) {
+  id = await checkId(id); if (!id) return;
+  try {
+    setStatus(`抓取 ${id} ${S.names[id]} 的資料…`);
+    const r = await fetchStock({ id }, S.cond);
+    if (!r) { setStatus(`${id} 沒有股價資料。`, true); return; }
+    if (!document.getElementById("cv")) render(currentData());
+    r.preview = true; select(null); drawItem(r);
+    document.getElementById("cv").scrollIntoView({ behavior: "smooth", block: "start" });
+    const sg = r.signals.map(x => x[1]).join("、") || "無";
+    setStatus(`${id} ${r.name}：收盤 ${fmt(r.close)}（${sign(r.chg)}）｜壓力 ${r.res[0] ? r.res[0].price : "—"}｜支撐 ${r.sup[0] ? r.sup[0].price : "—"}｜訊號：${sg}。尚未加入觀察名單。`);
+  } catch (e) { setStatus(`抓取失敗：${e.message}`, true); }
+}
+function removeStock(id) {
+  S.list = S.list.filter(x => x.id !== id); store.set("settings", S);
+  const D = currentData(); D.results = D.results.filter(x => x.id !== id); store.set("lastData", D);
+  render(D); setStatus(`已從觀察名單移除 ${id}。`);
+}
+function showStock(id) {
+  const rows = [...document.querySelectorAll("#tb tr.row")];
+  const D = currentData(), i = D.results.findIndex(x => x.id === id);
+  if (i >= 0) { select(rows[i]); drawItem(D.results[i]); rows[i] && rows[i].scrollIntoView({ behavior: "smooth", block: "center" }); }
+}
 async function runAll() {
   if (!S.token) { openSheet(); setStatus("請先在設定貼上 FinMind token。", true); return; }
   if (!S.list.length) { openSheet(); setStatus("請先在設定填入觀察股。", true); return; }
   const btn = document.getElementById("bRun"); btn.disabled = true;
-  const C = S.cond, start = ago(220), warn = [];
+  const C = S.cond, start = ago(400), warn = [];
   try {
     setStatus("查詢股票名稱…");
     await lookupNames(S.list.map(x => x.id));
     const tasks = [];
     const idx = [["TAIEX", "加權指數"], ["TPEx", "櫃買指數"]];
-    idx.forEach(([id, nm]) => tasks.push(async () => { try { const p = await fetchDS("TaiwanStockPrice", id, start); return { idx: true, r: analyze(id, nm, p, [], [], [], [], C) }; } catch (e) { warn.push(nm + " 抓取失敗"); return null; } }));
+    idx.forEach(([id, nm]) => tasks.push(async () => { try { const p = await fetchDS("TaiwanStockPrice", id, start); const r = analyze(id, nm, p, [], [], [], [], C); r.is_index = true; return { idx: true, r }; } catch (e) { warn.push(nm + " 抓取失敗"); return null; } }));
     tasks.push(async () => { try { return { chips: await marketChips(ago(20)) }; } catch (e) { warn.push("大盤籌碼抓取失敗"); return null; } });
     S.list.forEach(x => tasks.push(async () => {
-      try {
-        const [p, i, m, rv, fn] = await Promise.all([
-          fetchDS("TaiwanStockPrice", x.id, start), fetchDS("TaiwanStockInstitutionalInvestorsBuySell", x.id, start),
-          fetchDS("TaiwanStockMarginPurchaseShortSale", x.id, start), fetchDS("TaiwanStockMonthRevenue", x.id, ago(450)),
-          fetchDS("TaiwanStockFinancialStatements", x.id, ago(800))]);
-        if (!p.length) { warn.push(`${x.id} 沒有股價資料`); return null; }
-        return { r: analyze(x.id, S.names[x.id] || x.id, p, i, m, rv, fn, C, x.shares || x.cost ? { shares: x.shares, cost: x.cost } : null) };
-      } catch (e) { warn.push(`${x.id}：${e.message}`); return null; }
+      try { const r = await fetchStock(x, C); if (!r) { warn.push(`${x.id} 沒有股價資料`); return null; } return { r }; }
+      catch (e) { warn.push(`${x.id}：${e.message}`); return null; }
     }));
     const out = await pool(tasks, 4, (d, n) => setStatus(`更新中… ${d} / ${n}`));
     const market = { indexes: [], chips: null }, results = [];
     out.forEach(o => { if (!o) return; if (o.chips) market.chips = o.chips; else if (o.idx) market.indexes.push(o.r); else results.push(o.r); });
     const tx = market.indexes.find(r => r.id === "TAIEX");
     if (tx && market.chips) { tx.f_series = market.chips.foreign; tx.f_unit = "億元"; }
-    results.sort((a, b) => b.score - a.score || Object.values(b.ok).filter(Boolean).length - Object.values(a.ok).filter(Boolean).length);
-    const now = new Date(), pad = n => String(n).padStart(2, "0");
-    const D = { results, market, cond: C, updated: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}` };
+    sortResults(results);
+    const D = { results, market, cond: C, updated: stamp() };
     store.set("lastData", D);
     render(D);
     setStatus(warn.length ? "完成，但有部分資料沒抓到：" + warn.join("；") : "", !!warn.length);
@@ -319,6 +459,7 @@ const mk = b => b ? '<span class="ok">✓</span>' : '<span class="no">✗</span>
 const lvTxt = l => l ? `${fmt(l.price)} <span class="small">${l.label}・${l.dist > 0 ? "+" : ""}${l.dist}%</span>` : "—";
 const sigHtml = r => r.signals.length ? r.signals.map(([t, x]) => `<span class="sig ${t}">${x}</span>`).join("") : '<span class="small">無</span>';
 let CUR = null;
+const planHtml = r => r.plan && r.plan.length ? `<ul class="plan">${r.plan.map(([k, px, t]) => `<li><b>${k}</b>${px ? `<span class="px">${px}</span>` : ""}${t}</li>`).join("")}</ul>` : "";
 
 function render(D) {
   const C = D.cond, M = D.market || { indexes: [], chips: null }, need = new Set(C["必要條件"]);
@@ -331,11 +472,12 @@ function render(D) {
   }
   const hasHold = D.results.some(r => r.holding);
   if (hasHold) h += `<h3>持股技術位置</h3><div class="sub" style="margin:0">壓力、支撐依均線、20／60日高低點與近期轉折點計算。</div>
-    <div class="tw"><table><thead><tr><th>股票</th><th class="num">收盤</th><th class="num">成本</th><th class="num">報酬率</th><th>短線訊號</th><th>壓力 1</th><th>壓力 2</th><th>支撐 1（短線防守）</th><th>支撐 2</th></tr></thead><tbody id="hb"></tbody></table></div>`;
+    <div class="tw"><table><thead><tr><th>股票</th><th class="num">收盤</th><th class="num">成本</th><th class="num">報酬率</th><th>短線訊號</th><th>壓力 1</th><th>壓力 2</th><th>支撐 1（短線防守）</th><th>支撐 2</th></tr></thead><tbody id="hb"></tbody></table></div>
+    <h3>持股賣出價位參考</h3><div class="sub" style="margin:0">依壓力、均線與今日低點自動產生，點一檔展開。</div><div id="hp"></div>`;
   h += `<h3>選股條件</h3><div class="conds">${[["均線", `收盤站上 ${C["均線天數"]} 日均線`], ["RSI", `RSI${C["RSI短"]} > RSI${C["RSI長"]}`], ["KD", `K${C["K天數"]} > D${C["D天數"]}`], ["外資", `外資連買 ${C["外資連買天數"]} 日`], ["融資", `融資 ${C["融資比較天數"]} 日內減少`]]
     .map(([k, t]) => `<span class="chip ${need.has(k) ? "need" : ""}">${t}</span>`).join("")}</div>
     <div class="tw"><table><thead><tr><th>股票</th><th class="num">收盤</th><th class="num">漲跌</th><th>站上均線</th><th>RSI 短&gt;長</th><th>K&gt;D</th><th class="ref">外資連買</th><th class="ref">融資減少</th><th class="ref num">月營收年增</th><th class="ref num">最新 EPS</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
-    <div class="panel"><h2 id="ctitle"></h2><div class="legend" id="lg"></div><canvas id="cv"></canvas></div>
+    <div class="panel"><div class="pbar"><h2 id="ctitle"></h2><button class="ghost" id="bPAdd" style="display:none">加入觀察</button><button class="ghost" id="bDel" style="display:none">移除</button></div><div id="cplan"></div><div class="legend" id="lg"></div><canvas id="cv"></canvas></div>
     <div class="note">深色條件為「符合」的必要條件。壓力、支撐與短線訊號為依固定規則計算的技術參考，不是買賣建議，實際操作請自行判斷。資料來源：FinMind。</div>`;
   document.getElementById("main").innerHTML = h;
 
@@ -374,6 +516,9 @@ function render(D) {
         <td>${lvTxt(r.res[0])}</td><td>${lvTxt(r.res[1])}</td><td>${lvTxt(r.sup[0])}</td><td>${lvTxt(r.sup[1])}</td>`;
       tr.onclick = () => { select(tr); drawItem(r); document.getElementById("cv").scrollIntoView({ behavior: "smooth", block: "center" }); };
       hb.appendChild(tr);
+      const dt = document.createElement("details"); dt.className = "hc";
+      dt.innerHTML = `<summary><b>${r.id} ${r.name}</b><span>${fmt(r.close)}</span><span class="${cls(hd.ret)}">${hd.ret == null ? "" : sign(hd.ret) + "%"}</span>${r.signals.slice(0, 2).map(([t, x]) => `<span class="sig ${t}">${x}</span>`).join("")}</summary>${planHtml(r)}`;
+      document.getElementById("hp").appendChild(dt);
     });
   }
   const tb = document.getElementById("tb");
@@ -394,7 +539,7 @@ function render(D) {
   const firstCard = mkEl.firstChild;
   if (M.indexes[0]) { select(firstCard); drawItem(M.indexes[0]); } else if (D.results[0]) { select(tb.firstChild); drawItem(D.results[0]); }
 }
-function select(el) { document.querySelectorAll(".card,tr.row").forEach(x => x.classList.toggle("sel", x === el)); }
+function select(el) { document.querySelectorAll(".card,tr.row").forEach(x => x.classList.toggle("sel", !!el && x === el)); }
 function line(g, arr, x, y, color) {
   g.strokeStyle = color; g.lineWidth = 1.6; g.beginPath(); let st = false;
   arr.forEach((v, k) => { if (v == null) return; st ? g.lineTo(x(k), y(v)) : g.moveTo(x(k), y(v)); st = true; });
@@ -402,7 +547,11 @@ function line(g, arr, x, y, color) {
 }
 function drawItem(r) {
   CUR = r;
-  document.getElementById("ctitle").textContent = `${r.id} ${r.name}　近 ${r.candles.length} 個交易日`;
+  document.getElementById("ctitle").textContent = `${r.id} ${r.name}${r.preview ? "（查詢）" : ""}　近 ${r.candles.length} 天`;
+  const inList = S.list.some(x => x.id === r.id), bDel = document.getElementById("bDel"), bPAdd = document.getElementById("bPAdd");
+  if (bDel) { bDel.style.display = !r.is_index && inList && !r.preview ? "" : "none"; bDel.onclick = () => { if (confirmBox(`確定把 ${r.id} ${r.name} 從觀察名單移除？`)) removeStock(r.id); }; }
+  if (bPAdd) { bPAdd.style.display = r.preview && !inList ? "" : "none"; bPAdd.onclick = () => addStock(r.id); }
+  const cp = document.getElementById("cplan"); if (cp) cp.innerHTML = r.is_index ? "" : planHtml(r);
   const cv = document.getElementById("cv"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth;
   const P = { top: 8, ph: 260, fy: 284, fh: 64, ry: 372, rh: 76, ky: 466, kh: 76 }, H = 562;
   cv.style.height = H + "px"; cv.width = W * dpr; cv.height = H * dpr;
@@ -486,6 +635,113 @@ $("bImp").onclick = () => {
 };
 function alertBox(t) { $("fCode").value = t; }
 $("bRun").onclick = runAll;
+function confirmBox(t) { try { return window.confirm(t); } catch (e) { return true; } }
+const readAdd = () => [$("aId").value, parseInt($("aSh").value, 10) || null, parseFloat($("aCo").value) || null];
+$("bAdd").onclick = async () => { const [id, sh, co] = readAdd(); await addStock(id, sh, co); $("aId").value = $("aSh").value = $("aCo").value = ""; };
+$("bLook").onclick = () => lookStock($("aId").value);
+$("aId").addEventListener("keydown", e => { if (e.key === "Enter") $("bLook").click(); });
+
+/* ---------- 分頁 ---------- */
+function showTab(t) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  $("main").style.display = t === "1" ? "" : "none"; $("tab2").style.display = t === "2" ? "" : "none"; $("tab3").style.display = t === "3" ? "" : "none";
+  document.querySelector(".addbar").style.display = t === "1" ? "" : "none";
+  if (t === "2") renderPicks(); if (t === "3") loadNews();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
+
+/* ---------- 智選股 ---------- */
+const DEF_POOL = "2330 2317 2454 2308 2382 2881 2882 2891 2412 3711 2303 2886 2884 1216 2357 2885 3231 2892 2345 2880 3034 2890 5880 2327 3008 2883 2379 6669 3017 2301 2887 1303 2603 3661 2002 1301 4938 2395 3045 2912 5871 2207 1101 6505 4904 3037 2408 2376 2059 2360 3653 2368 3443 6515 2383";
+function poolIds() { return (S.pool || DEF_POOL).split(/[\s,，]+/).map(x => x.trim().toUpperCase()).filter(x => /^[0-9A-Z]{4,6}$/.test(x)); }
+async function scanPicks() {
+  if (!S.token) { openSheet(); setStatus("請先在設定貼上 FinMind token。", true); return store.get("picks", null); }
+  const today = iso(new Date());
+  const ids = poolIds(), C = S.cond, start = ago(220);
+  await lookupNames(ids);
+  const scored = await pool(ids.map(id => async () => {
+    try {
+      const p = (await fetchDS("TaiwanStockPrice", id, start)).filter(r => r.close).sort((a, b) => a.date < b.date ? -1 : 1);
+      if (p.length < 70) return null;
+      const c = p.map(r => r.close), mas = { 5: sma(c, 5), 20: sma(c, 20), 60: sma(c, 60) };
+      const vol20 = p.slice(-20).reduce((a, r) => a + r.Trading_money, 0) / 20;
+      const t = trendInfo(c, mas, rsi(c, C["RSI短"]), rsi(c, C["RSI長"]), kd(p.map(r => r.max), p.map(r => r.min), c, C["K天數"])[0], kd(p.map(r => r.max), p.map(r => r.min), c, C["D天數"])[1]);
+      return { id, t, vol20 };
+    } catch (e) { return null; }
+  }), 4, (d, n) => setStatus(`掃描候選池… ${d} / ${n}`));
+  const ranked = scored.filter(x => x && x.t.core && x.vol20 > 3e8).sort((a, b) => b.t.score - a.t.score || b.t.ret20 - a.t.ret20).slice(0, 5);
+  setStatus("抓取入選股票的完整資料…");
+  const picks = (await pool(ranked.map(x => async () => { try { const r = await fetchStock({ id: x.id }, C); if (r) r.preview = true; return r; } catch (e) { return null; } }), 3)).filter(Boolean);
+  const out = { day: today, at: stamp(), scanned: ids.length, passed: scored.filter(x => x && x.t.core).length, picks };
+  store.set("picks", out); setStatus("");
+  return out;
+}
+async function renderPicks(force) {
+  const el = $("tab2");
+  const cache = store.get("picks", null);
+  const head = (c) => `<h3>智選股</h3><div class="sub">從 ${c ? c.scanned : poolIds().length} 檔大型股候選池中，依趨勢規則每天篩一次，取分數最高的 3～5 檔。核心條件：站上月線、月線在季線之上、月線上揚，並排除 20 日平均成交金額低於 3 億的股票。這是依固定規則篩出的技術面結果，不是推薦買進。</div>
+    <div class="btns" style="margin-top:6px"><button class="ghost" id="bScan">${c ? "重新掃描（約 80 次查詢）" : "開始掃描"}</button></div>`;
+  const draw = c => {
+    if (!c) { el.innerHTML = head(null); $("bScan").onclick = () => renderPicks(true); return; }
+    el.innerHTML = head(c) + `<div class="sub">${c.day === iso(new Date()) ? "今天" : "上次"} ${c.at} 掃描・${c.passed} 檔通過核心條件${c.picks.length ? "" : "，今天沒有符合的股票"}</div>` +
+      c.picks.map((r, i) => `<div class="pick"><div class="hd"><span class="nm">${r.id} ${r.name}</span><span>${fmt(r.close)}</span><span class="${cls(r.chg)}">${sign(r.chg)}</span><span class="small">趨勢分數 ${r.trend.score}/9・20 日 ${r.trend.ret20 > 0 ? "+" : ""}${r.trend.ret20}%</span></div>
+        <div style="margin-top:6px">${r.trend.checks.map(([t, ok]) => `<span class="tag ${ok ? "" : "no"}">${t}</span>`).join("")}</div>
+        <div class="row2" style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin-top:8px"><span class="small">壓力</span><span>${lvTxt(r.res[0])}</span><span class="small">支撐</span><span>${lvTxt(r.sup[0])}</span>
+        <span class="small">籌碼</span><span>外資 ${r.foreign.map(sign).join("、") || "—"}・融資 ${sign(r.margin_chg)}</span><span class="small">基本面</span><span>月營收年增 ${r.rev && r.rev.yoy != null ? sign(r.rev.yoy) + "%" : "—"}・EPS ${r.eps ? r.eps.eps + "（" + r.eps.label + "）" : "—"}</span></div>
+        ${planHtml(r)}
+        <div class="act"><button class="ghost" data-chart="${i}">看圖表</button><button data-add="${r.id}">${S.list.some(x => x.id === r.id) ? "已在觀察名單" : "加入觀察"}</button></div></div>`).join("");
+    $("bScan").onclick = () => renderPicks(true);
+    el.querySelectorAll("[data-chart]").forEach(b => b.onclick = () => { showTab("1"); if (!$("cv")) render(currentData()); const r = c.picks[+b.dataset.chart]; r.preview = !S.list.some(x => x.id === r.id); select(null); drawItem(r); $("cv").scrollIntoView({ behavior: "smooth", block: "start" }); });
+    el.querySelectorAll("[data-add]").forEach(b => b.onclick = async () => { if (S.list.some(x => x.id === b.dataset.add)) return; await addStock(b.dataset.add); b.textContent = "已在觀察名單"; });
+  };
+  draw(cache);
+  if (force || !cache) { try { draw(await scanPicks()); } catch (e) { setStatus("掃描失敗：" + e.message, true); } }
+}
+
+/* ---------- 每日新聞 ---------- */
+function md(src) {
+  const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const lines = src.split(/\r?\n/); let h = "", i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(x => x.trim());
+      const body = rows.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      h += `<div class="tw"><table><thead><tr>${cells(body[0]).map(c => `<th>${inl(c)}</th>`).join("")}</tr></thead><tbody>${body.slice(1).map(r => `<tr>${cells(r).map(c => `<td>${inl(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      continue;
+    }
+    let m;
+    if ((m = l.match(/^(#{1,3})\s+(.*)/))) { h += `<h${m[1].length}>${inl(m[2])}</h${m[1].length}>`; i++; continue; }
+    if (/^\s*([-*•]|\d+[.、])\s+/.test(l)) {
+      const ord = /^\s*\d/.test(l); let items = "";
+      while (i < lines.length && /^\s*([-*•]|\d+[.、])\s+/.test(lines[i])) items += `<li>${inl(lines[i++].replace(/^\s*([-*•]|\d+[.、])\s+/, ""))}</li>`;
+      h += ord ? `<ol>${items}</ol>` : `<ul>${items}</ul>`; continue;
+    }
+    if (l.trim()) h += `<p>${inl(l)}</p>`;
+    i++;
+  }
+  return h;
+}
+async function loadNews() {
+  const el = $("tab3");
+  el.innerHTML = `<h3>每日新聞</h3><div class="sub">讀取中…</div>`;
+  try {
+    const r = await fetch("news.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("none");
+    const js = await r.json(), items = (js.items || []).slice().sort((a, b) => a.time < b.time ? 1 : -1);
+    if (!items.length) throw new Error("none");
+    const show = k => {
+      const it = items[k];
+      el.innerHTML = `<h3>每日新聞</h3><div class="newslist">${items.slice(0, 10).map((x, j) => `<button class="${j === k ? "" : "ghost"}" data-k="${j}">${x.time.slice(5, 10).replace("-", "/")} ${x.type}</button>`).join("")}</div>
+        <div class="news"><div class="small">${it.time}・${it.type}</div>${md(it.markdown || "")}</div>`;
+      el.querySelectorAll("[data-k]").forEach(b => b.onclick = () => show(+b.dataset.k));
+    };
+    show(0);
+  } catch (e) {
+    el.innerHTML = `<h3>每日新聞</h3><div class="empty">每日財經早報、晚報還沒有連到這個網站。<br>連好之後，每天 08:00 和 21:30 的簡報會自動出現在這裡。</div>`;
+  }
+}
 
 /* ---------- 啟動 ---------- */
 const last = store.get("lastData", null);
