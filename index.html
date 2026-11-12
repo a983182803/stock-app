@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="選股平台">
+<meta name="theme-color" content="#f7f7f5">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>選股平台</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1f2a30; --mute:#6b7478; --line:#e4e4e0; --up:#d6453d; --down:#1f9d55; --dark:#26343b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif; }
+  .wrap { max-width:1180px; margin:0 auto; padding:calc(14px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); }
+  header { display:flex; align-items:center; gap:10px; }
+  h1 { font-size:24px; margin:0; flex:1; }
+  button { font:inherit; border:0; border-radius:10px; padding:9px 14px; background:var(--dark); color:#fff; font-weight:600; }
+  button.ghost { background:#e9ebe8; color:var(--ink); }
+  button:disabled { opacity:.5; }
+  .sub { color:var(--mute); font-size:13px; margin:6px 0 10px; line-height:1.5; }
+  h3 { font-size:18px; margin:22px 0 6px; }
+  .conds { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-size:13px; }
+  .chip.need { background:var(--dark); color:#fff; border-color:var(--dark); }
+  .tw { overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--card); border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); margin-top:10px; }
+  table { width:100%; border-collapse:collapse; white-space:nowrap; }
+  th, td { padding:10px 11px; text-align:left; font-size:14px; border-bottom:1px solid var(--line); }
+  th { background:var(--dark); color:#fff; font-weight:600; font-size:13px; }
+  th.ref { background:#4a5a60; }
+  tr.row { cursor:pointer; } tr.sel { background:#eaf1f8; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .up { color:var(--up); } .down { color:var(--down); }
+  .ok { color:var(--down); font-weight:700; } .no { color:#b9bdbf; }
+  .pass { background:var(--up); color:#fff; border-radius:6px; padding:2px 8px; font-size:12px; font-weight:700; }
+  .small { color:var(--mute); font-size:12px; }
+  .sig { display:inline-block; border-radius:6px; padding:2px 7px; margin:1px 3px 1px 0; font-size:12px; font-weight:600; }
+  .sig.weak { background:#e6f4ec; color:#16794a; } .sig.strong { background:#fbe9e7; color:#b3362f; }
+  .mk { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:12px; }
+  .card { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,.06); cursor:pointer; }
+  .card.sel { outline:2px solid #2f5d8a; }
+  .card .big { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .card .row2 { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:14px; margin-top:8px; }
+  .card .k { color:var(--mute); }
+  .panel { background:var(--card); border-radius:12px; margin-top:18px; padding:14px 12px 6px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .panel h2 { font-size:17px; margin:0 0 6px; }
+  .legend { font-size:12px; color:var(--mute); margin:2px 0 8px; display:flex; flex-wrap:wrap; gap:10px; }
+  .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; }
+  canvas { width:100%; display:block; }
+  .note { color:var(--mute); font-size:12px; margin-top:16px; line-height:1.6; }
+  .status { background:#fff7e0; border-radius:10px; padding:10px 12px; font-size:14px; margin:10px 0; display:none; }
+  .status.err { background:#fde8e6; color:#9b2c24; }
+  .empty { background:var(--card); border-radius:12px; padding:22px 18px; margin-top:14px; line-height:1.7; }
+  /* 設定 */
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .box { position:absolute; left:0; right:0; bottom:0; max-height:92vh; overflow:auto; background:var(--bg); border-radius:16px 16px 0 0; padding:16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  .sheet h2 { margin:0 0 10px; font-size:20px; }
+  label { display:block; font-size:14px; font-weight:600; margin:14px 0 6px; }
+  input, textarea { width:100%; font:inherit; font-size:16px; border:1px solid var(--line); border-radius:10px; padding:10px; background:#fff; }
+  textarea { min-height:160px; font-family:ui-monospace,Menlo,monospace; font-size:15px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid label { margin-top:4px; font-weight:500; }
+  .checks label { display:inline-flex; align-items:center; gap:6px; margin-right:14px; font-weight:500; }
+  .checks input { width:auto; }
+  .btns { display:flex; gap:10px; margin-top:18px; }
+  .btns button { flex:1; padding:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>選股平台</h1>
+    <button class="ghost" id="bSet">設定</button>
+    <button id="bRun">更新</button>
+  </header>
+  <div class="sub" id="sub"></div>
+  <div class="status" id="status"></div>
+  <div id="main"></div>
+</div>
+
+<div class="sheet" id="sheet"><div class="box">
+  <h2>設定</h2>
+  <label>FinMind token</label>
+  <input id="fTok" type="password" autocomplete="off" placeholder="貼上你的 FinMind token">
+  <div class="small">只存在這支手機上，不會上傳到其他地方。</div>
+  <label>觀察股與持股（一行一檔）</label>
+  <textarea id="fList" placeholder="代號 股數 成本&#10;2330 400 1997.24&#10;2317 2000 259.22&#10;2454（只寫代號＝只觀察、不算持股）"></textarea>
+  <div class="small">格式：代號 股數 成本。只寫代號代表只觀察。股票數量越多，更新越久，也越耗 FinMind 查詢額度。</div>
+  <label>選股條件</label>
+  <div class="grid">
+    <div><label>均線天數</label><input id="cMA" type="number" inputmode="numeric"></div>
+    <div><label>外資連買天數</label><input id="cFB" type="number" inputmode="numeric"></div>
+    <div><label>RSI 短</label><input id="cRS" type="number" inputmode="numeric"></div>
+    <div><label>RSI 長</label><input id="cRL" type="number" inputmode="numeric"></div>
+    <div><label>K 天數</label><input id="cK" type="number" inputmode="numeric"></div>
+    <div><label>D 天數</label><input id="cD" type="number" inputmode="numeric"></div>
+    <div><label>融資比較天數</label><input id="cMG" type="number" inputmode="numeric"></div>
+  </div>
+  <label>「符合」需要的條件</label>
+  <div class="checks" id="cNeed"></div>
+  <label>匯入／匯出設定碼</label>
+  <textarea id="fCode" style="min-height:80px" placeholder="把設定碼貼在這裡後按「匯入」"></textarea>
+  <div class="btns"><button class="ghost" id="bExp">匯出</button><button class="ghost" id="bImp">匯入</button></div>
+  <div class="btns"><button class="ghost" id="bCancel">取消</button><button id="bSave">儲存</button></div>
+</div></div>
+
+<script>
+"use strict";
+const API = "https://api.finmindtrade.com/api/v4/data";
+const DEF_COND = { "均線天數": 20, "顯示均線": [5, 10, 20, 60], "RSI短": 5, "RSI長": 10, "K天數": 5, "D天數": 5, "外資連買天數": 3, "融資比較天數": 5, "必要條件": ["RSI", "KD", "均線"] };
+const NEED_KEYS = [["均線", "站上均線"], ["RSI", "RSI 短>長"], ["KD", "K>D"], ["外資", "外資連買"], ["融資", "融資減少"]];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+let S = store.get("settings", { token: "", list: [], cond: DEF_COND, names: {} });
+S.cond = Object.assign({}, DEF_COND, S.cond || {});
+S.names = S.names || {};
+
+/* ---------- 抓資料 ---------- */
+const iso = d => d.toISOString().slice(0, 10);
+const ago = n => iso(new Date(Date.now() - n * 864e5));
+async function fetchDS(dataset, id, start) {
+  const q = new URLSearchParams({ dataset, data_id: id || "", start_date: start, token: S.token });
+  for (let a = 0; a < 3; a++) {
+    try {
+      const r = await fetch(`${API}?${q}`);
+      const js = await r.json();
+      if (js.status !== 200) throw new Error(js.msg || ("HTTP " + r.status));
+      return js.data || [];
+    } catch (e) {
+      if (a === 2) throw new Error(`${dataset} ${id}：${e.message}`);
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  }
+}
+async function pool(tasks, n, onDone) {
+  const out = new Array(tasks.length); let i = 0, done = 0;
+  async function worker() { while (i < tasks.length) { const k = i++; out[k] = await tasks[k](); onDone && onDone(++done, tasks.length); } }
+  await Promise.all(Array.from({ length: Math.min(n, tasks.length) }, worker));
+  return out;
+}
+
+/* ---------- 指標 ---------- */
+const r2 = v => Math.round(v * 100) / 100;
+const sma = (v, n) => v.map((_, i) => i + 1 < n ? null : r2(v.slice(i + 1 - n, i + 1).reduce((a, b) => a + b, 0) / n));
+function rsi(c, n) {
+  const out = c.map(() => null); if (c.length <= n) return out;
+  const g = [], l = [];
+  for (let i = 1; i < c.length; i++) { g.push(Math.max(c[i] - c[i - 1], 0)); l.push(Math.max(c[i - 1] - c[i], 0)); }
+  let ag = g.slice(0, n).reduce((a, b) => a + b, 0) / n, al = l.slice(0, n).reduce((a, b) => a + b, 0) / n;
+  for (let i = n; i < c.length; i++) {
+    if (i > n) { ag = (ag * (n - 1) + g[i - 1]) / n; al = (al * (n - 1) + l[i - 1]) / n; }
+    out[i] = r2(al === 0 ? 100 : 100 - 100 / (1 + ag / al));
+  }
+  return out;
+}
+function kd(h, l, c, n) {
+  let k = 50, d = 50; const ks = [], ds = [];
+  for (let i = 0; i < c.length; i++) {
+    if (i + 1 < n) { ks.push(null); ds.push(null); continue; }
+    const hh = Math.max(...h.slice(i + 1 - n, i + 1)), ll = Math.min(...l.slice(i + 1 - n, i + 1));
+    const rsv = hh === ll ? 50 : (c[i] - ll) / (hh - ll) * 100;
+    k = k * 2 / 3 + rsv / 3; d = d * 2 / 3 + k / 3; ks.push(r2(k)); ds.push(r2(d));
+  }
+  return [ks, ds];
+}
+function levels(prices, c, mas, nWin = 60, sw = 3) {
+  const P = prices.slice(-nWin), hs = P.map(r => r.max), ls = P.map(r => r.min), dts = P.map(r => r.date), cl = c[c.length - 1];
+  const cand = [];
+  for (const [n, v] of Object.entries(mas)) if (v.length && v[v.length - 1] != null) cand.push([v[v.length - 1], "MA" + n]);
+  cand.push([Math.max(...hs.slice(-20)), "20日高"], [Math.min(...ls.slice(-20)), "20日低"], [Math.max(...hs), "60日高"], [Math.min(...ls), "60日低"]);
+  for (let i = sw; i < hs.length - sw; i++) {
+    const md = dts[i].slice(5).replace("-", "/");
+    if (hs[i] === Math.max(...hs.slice(i - sw, i + sw + 1))) cand.push([hs[i], "前高 " + md]);
+    if (ls[i] === Math.min(...ls.slice(i - sw, i + sw + 1))) cand.push([ls[i], "前低 " + md]);
+  }
+  const pick = (items, desc) => {
+    const out = [];
+    items.sort((a, b) => desc ? b[0] - a[0] : a[0] - b[0]).forEach(([v, lab]) => {
+      if (out.length >= 2) return;
+      if (out.length && Math.abs(v - out[out.length - 1][0]) / cl < 0.01) return;
+      out.push([r2(v), lab]);
+    });
+    return out.map(([v, lab]) => ({ price: v, label: lab, dist: Math.round((v - cl) / cl * 1000) / 10 }));
+  };
+  return [pick(cand.filter(x => x[0] > cl * 1.002), false), pick(cand.filter(x => x[0] < cl * 0.998), true)];
+}
+function signals(c, ma5, rs, ks, ds, res) {
+  const out = [], L = c.length - 1;
+  if (L >= 1 && ma5[L] != null && ma5[L - 1] != null) {
+    if (c[L] < ma5[L] && c[L - 1] >= ma5[L - 1]) out.push(["weak", "今日跌破 5 日線"]);
+    else if (c[L] > ma5[L] && c[L - 1] <= ma5[L - 1]) out.push(["strong", "今日站回 5 日線"]);
+  }
+  const k = ks[L], d = ds[L], pk = ks[L - 1], pd = ds[L - 1];
+  if ([k, d, pk, pd].every(v => v != null)) {
+    if (k < d && pk >= pd) out.push(["weak", "KD 死亡交叉" + (pk > 70 ? "（高檔）" : "")]);
+    else if (k > d && pk <= pd) out.push(["strong", "KD 黃金交叉" + (pk < 30 ? "（低檔）" : "")]);
+    if (k > 80) out.push(["weak", `K 值 ${Math.round(k)} 高檔`]);
+  }
+  if (rs[L] != null && rs[L] > 80) out.push(["weak", `RSI5 ${Math.round(rs[L])} 過熱`]);
+  if (res.length && res[0].dist <= 2) out.push(["weak", `接近壓力 ${res[0].price}`]);
+  return out;
+}
+function revenueInfo(rev) {
+  const by = {}; rev.forEach(r => by[r.revenue_year * 100 + r.revenue_month] = r.revenue);
+  const keys = Object.keys(by).map(Number); if (!keys.length) return null;
+  const k = Math.max(...keys), cur = by[k], prev = by[k - 100];
+  return { label: `${Math.floor(k / 100)}/${String(k % 100).padStart(2, "0")}`, yoy: prev ? Math.round((cur - prev) / prev * 1000) / 10 : null };
+}
+function epsInfo(fin) {
+  const eps = {}; fin.filter(r => r.type === "EPS").forEach(r => eps[r.date] = r.value);
+  const ks = Object.keys(eps).sort(); if (!ks.length) return null;
+  const last = ks[ks.length - 1], y = last.slice(0, 4), md = last.slice(5);
+  const q = { "03-31": "Q1", "06-30": "Q2", "09-30": "Q3", "12-31": "Q4" }[md] || md;
+  return { label: y + q, eps: eps[last], prev: eps[`${+y - 1}-${md}`] ?? null };
+}
+function analyze(sid, name, prices, inst, margin, rev, fin, C, hold) {
+  prices = prices.filter(r => r.close).sort((a, b) => a.date < b.date ? -1 : 1);
+  const c = prices.map(r => r.close), h = prices.map(r => r.max), l = prices.map(r => r.min);
+  const mas = {}; [...new Set([...C["顯示均線"], C["均線天數"], 5])].forEach(n => mas[n] = sma(c, n));
+  const ma = mas[C["均線天數"]], rS = rsi(c, C["RSI短"]), rL = rsi(c, C["RSI長"]);
+  const kS = kd(h, l, c, C["K天數"])[0], dL = kd(h, l, c, C["D天數"])[1];
+  const fd = {};
+  inst.forEach(r => { if (r.name === "Foreign_Investor" || r.name === "Foreign_Dealer_Self") fd[r.date] = (fd[r.date] || 0) + (r.buy - r.sell) / 1000; });
+  const fdates = Object.keys(fd).sort(), nb = C["外資連買天數"];
+  const lastF = fdates.slice(-nb).map(d => Math.round(fd[d]));
+  margin = margin.slice().sort((a, b) => a.date < b.date ? -1 : 1);
+  const mb = margin.map(r => r.MarginPurchaseTodayBalance), nm = C["融資比較天數"];
+  const mchg = mb.length > nm ? mb[mb.length - 1] - mb[mb.length - 1 - nm] : null;
+  const last = a => a.length ? a[a.length - 1] : null;
+  const cl = last(c), m20 = last(ma), rs = last(rS), rl = last(rL), kk = last(kS), dd = last(dL);
+  const ok = { "RSI": rs != null && rl != null && rs > rl, "KD": kk != null && dd != null && kk > dd, "均線": cl != null && m20 != null && cl > m20,
+    "外資": lastF.length === nb && lastF.every(v => v > 0), "融資": mchg != null && mchg < 0 };
+  const need = C["必要條件"], W = 60;
+  const [res, sup] = levels(prices, c, Object.fromEntries(C["顯示均線"].map(n => [n, mas[n]])));
+  const ma_lines = {}; C["顯示均線"].forEach(n => ma_lines[n] = mas[n].slice(-W));
+  return {
+    id: sid, name, date: last(prices) ? last(prices).date : "", close: cl, chg: c.length > 1 ? r2(c[c.length - 1] - c[c.length - 2]) : 0,
+    ma: m20, rsi_s: rs, rsi_l: rl, k: kk, d: dd, foreign: lastF, margin_chg: mchg,
+    rev: revenueInfo(rev), eps: epsInfo(fin), ok, need, pass: need.every(x => ok[x]), score: need.filter(x => ok[x]).length,
+    candles: prices.slice(-W).map(r => [r.date, r.open, r.max, r.min, r.close]), ma_lines,
+    rsi_lines: [rS.slice(-W), rL.slice(-W)], kd_lines: [kS.slice(-W), dL.slice(-W)],
+    f_series: fdates.slice(-W).map(d => [d, Math.round(fd[d])]), chip_date: last(fdates) || "",
+    res, sup, signals: signals(c, mas[5], rS, kS, dL, res),
+    holding: hold ? { shares: hold.shares, cost: hold.cost, ret: hold.cost ? r2((cl - hold.cost) / hold.cost * 100) : null } : null,
+  };
+}
+async function marketChips(start) {
+  const [inst, mg, fu] = await Promise.all([
+    fetchDS("TaiwanStockTotalInstitutionalInvestors", "", start),
+    fetchDS("TaiwanStockTotalMarginPurchaseShortSale", "", start),
+    fetchDS("TaiwanFuturesInstitutionalInvestors", "TX", start)]);
+  const by = {}; inst.forEach(r => { if (r.name === "Foreign_Investor" || r.name === "Foreign_Dealer_Self") by[r.date] = (by[r.date] || 0) + (r.buy - r.sell) / 1e8; });
+  const foreign = Object.keys(by).sort().slice(-10).map(d => [d, Math.round(by[d] * 10) / 10]);
+  const margin = mg.filter(r => r.name === "MarginPurchaseMoney").sort((a, b) => a.date < b.date ? -1 : 1).slice(-10)
+    .map(r => [r.date, Math.round(r.TodayBalance / 1e7) / 10, Math.round((r.TodayBalance - r.YesBalance) / 1e7) / 10]);
+  const net = fu.filter(r => r.institutional_investors === "外資").sort((a, b) => a.date < b.date ? -1 : 1)
+    .map(r => [r.date, r.long_open_interest_balance_volume - r.short_open_interest_balance_volume]);
+  const futures = net.map(([d, v], i) => [d, v, i ? v - net[i - 1][1] : null]).slice(-10);
+  const light = (kind, v) => v == null ? "⚪" :
+    kind === "foreign" ? (v > 0 ? "🟢" : v > -100 ? "🟡" : "🔴") :
+    kind === "margin" ? (v > 30 ? "🔴" : v > 0 ? "🟡" : "🟢") : (v < -3000 ? "🔴" : v < 0 ? "🟡" : "🟢");
+  const lv = a => a.length ? a[a.length - 1] : null;
+  return { foreign, margin, futures, lights: { foreign: light("foreign", lv(foreign) && lv(foreign)[1]), margin: light("margin", lv(margin) && lv(margin)[2]), futures: light("futures", lv(futures) && lv(futures)[2]) } };
+}
+async function lookupNames(ids) {
+  const miss = ids.filter(id => !S.names[id]); if (!miss.length) return;
+  try { (await fetchDS("TaiwanStockInfo", "", "2000-01-01")).forEach(r => { if (!S.names[r.stock_id]) S.names[r.stock_id] = r.stock_name; }); store.set("settings", S); } catch (e) {}
+}
+async function runAll() {
+  if (!S.token) { openSheet(); setStatus("請先在設定貼上 FinMind token。", true); return; }
+  if (!S.list.length) { openSheet(); setStatus("請先在設定填入觀察股。", true); return; }
+  const btn = document.getElementById("bRun"); btn.disabled = true;
+  const C = S.cond, start = ago(220), warn = [];
+  try {
+    setStatus("查詢股票名稱…");
+    await lookupNames(S.list.map(x => x.id));
+    const tasks = [];
+    const idx = [["TAIEX", "加權指數"], ["TPEx", "櫃買指數"]];
+    idx.forEach(([id, nm]) => tasks.push(async () => { try { const p = await fetchDS("TaiwanStockPrice", id, start); return { idx: true, r: analyze(id, nm, p, [], [], [], [], C) }; } catch (e) { warn.push(nm + " 抓取失敗"); return null; } }));
+    tasks.push(async () => { try { return { chips: await marketChips(ago(20)) }; } catch (e) { warn.push("大盤籌碼抓取失敗"); return null; } });
+    S.list.forEach(x => tasks.push(async () => {
+      try {
+        const [p, i, m, rv, fn] = await Promise.all([
+          fetchDS("TaiwanStockPrice", x.id, start), fetchDS("TaiwanStockInstitutionalInvestorsBuySell", x.id, start),
+          fetchDS("TaiwanStockMarginPurchaseShortSale", x.id, start), fetchDS("TaiwanStockMonthRevenue", x.id, ago(450)),
+          fetchDS("TaiwanStockFinancialStatements", x.id, ago(800))]);
+        if (!p.length) { warn.push(`${x.id} 沒有股價資料`); return null; }
+        return { r: analyze(x.id, S.names[x.id] || x.id, p, i, m, rv, fn, C, x.shares || x.cost ? { shares: x.shares, cost: x.cost } : null) };
+      } catch (e) { warn.push(`${x.id}：${e.message}`); return null; }
+    }));
+    const out = await pool(tasks, 4, (d, n) => setStatus(`更新中… ${d} / ${n}`));
+    const market = { indexes: [], chips: null }, results = [];
+    out.forEach(o => { if (!o) return; if (o.chips) market.chips = o.chips; else if (o.idx) market.indexes.push(o.r); else results.push(o.r); });
+    const tx = market.indexes.find(r => r.id === "TAIEX");
+    if (tx && market.chips) { tx.f_series = market.chips.foreign; tx.f_unit = "億元"; }
+    results.sort((a, b) => b.score - a.score || Object.values(b.ok).filter(Boolean).length - Object.values(a.ok).filter(Boolean).length);
+    const now = new Date(), pad = n => String(n).padStart(2, "0");
+    const D = { results, market, cond: C, updated: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}` };
+    store.set("lastData", D);
+    render(D);
+    setStatus(warn.length ? "完成，但有部分資料沒抓到：" + warn.join("；") : "", !!warn.length);
+  } catch (e) { setStatus("更新失敗：" + e.message, true); }
+  btn.disabled = false;
+}
+function setStatus(t, err) { const s = document.getElementById("status"); s.textContent = t; s.style.display = t ? "block" : "none"; s.classList.toggle("err", !!err); }
+
+/* ---------- 畫面 ---------- */
+const MAC = { "5": "#e0a100", "10": "#9b59b6", "20": "#2f5d8a", "60": "#7f8c8d" };
+const fmt = n => n == null ? "—" : n.toLocaleString("zh-TW");
+const sign = n => n == null ? "—" : n > 0 ? "+" + fmt(n) : fmt(n);
+const cls = n => n > 0 ? "up" : n < 0 ? "down" : "";
+const mk = b => b ? '<span class="ok">✓</span>' : '<span class="no">✗</span>';
+const lvTxt = l => l ? `${fmt(l.price)} <span class="small">${l.label}・${l.dist > 0 ? "+" : ""}${l.dist}%</span>` : "—";
+const sigHtml = r => r.signals.length ? r.signals.map(([t, x]) => `<span class="sig ${t}">${x}</span>`).join("") : '<span class="small">無</span>';
+let CUR = null;
+
+function render(D) {
+  const C = D.cond, M = D.market || { indexes: [], chips: null }, need = new Set(C["必要條件"]);
+  const first = M.indexes[0] || D.results[0];
+  document.getElementById("sub").textContent = `更新：${D.updated}・股價 ${first ? first.date : "—"}・籌碼 ${D.results[0] ? D.results[0].chip_date : "—"}`;
+  let h = `<h3>大盤</h3><div class="mk" id="mk"></div>`;
+  if (M.chips) {
+    h += `<div class="tw"><table><thead><tr><th>大盤籌碼</th><th class="num">最新</th><th class="num">變化</th><th>燈號</th><th>近 5 日</th></tr></thead><tbody id="cb"></tbody></table></div>
+      <div class="sub">燈號：外資買超🟢、賣超100億內🟡、超過🔴｜融資單日增加超過30億🔴、增加🟡、減少🟢｜外資台指期淨空單單日增加超過3,000口🔴、增加🟡、減少🟢</div>`;
+  }
+  const hasHold = D.results.some(r => r.holding);
+  if (hasHold) h += `<h3>持股技術位置</h3><div class="sub" style="margin:0">壓力、支撐依均線、20／60日高低點與近期轉折點計算。</div>
+    <div class="tw"><table><thead><tr><th>股票</th><th class="num">收盤</th><th class="num">成本</th><th class="num">報酬率</th><th>短線訊號</th><th>壓力 1</th><th>壓力 2</th><th>支撐 1（短線防守）</th><th>支撐 2</th></tr></thead><tbody id="hb"></tbody></table></div>`;
+  h += `<h3>選股條件</h3><div class="conds">${[["均線", `收盤站上 ${C["均線天數"]} 日均線`], ["RSI", `RSI${C["RSI短"]} > RSI${C["RSI長"]}`], ["KD", `K${C["K天數"]} > D${C["D天數"]}`], ["外資", `外資連買 ${C["外資連買天數"]} 日`], ["融資", `融資 ${C["融資比較天數"]} 日內減少`]]
+    .map(([k, t]) => `<span class="chip ${need.has(k) ? "need" : ""}">${t}</span>`).join("")}</div>
+    <div class="tw"><table><thead><tr><th>股票</th><th class="num">收盤</th><th class="num">漲跌</th><th>站上均線</th><th>RSI 短&gt;長</th><th>K&gt;D</th><th class="ref">外資連買</th><th class="ref">融資減少</th><th class="ref num">月營收年增</th><th class="ref num">最新 EPS</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="panel"><h2 id="ctitle"></h2><div class="legend" id="lg"></div><canvas id="cv"></canvas></div>
+    <div class="note">深色條件為「符合」的必要條件。壓力、支撐與短線訊號為依固定規則計算的技術參考，不是買賣建議，實際操作請自行判斷。資料來源：FinMind。</div>`;
+  document.getElementById("main").innerHTML = h;
+
+  const mkEl = document.getElementById("mk");
+  M.indexes.forEach(r => {
+    const c = document.createElement("div"); c.className = "card";
+    const pct = r.close ? (r.chg / (r.close - r.chg) * 100).toFixed(2) : 0;
+    c.innerHTML = `<div class="small">${r.name}・${r.date}</div>
+      <div class="big ${cls(r.chg)}">${fmt(r.close)} <span style="font-size:15px">${sign(r.chg)}（${r.chg > 0 ? "+" : ""}${pct}%）</span></div>
+      <div class="row2"><span class="k">壓力</span><span>${lvTxt(r.res[0])}<br>${lvTxt(r.res[1])}</span>
+      <span class="k">支撐</span><span>${lvTxt(r.sup[0])}<br>${lvTxt(r.sup[1])}</span>
+      <span class="k">指標</span><span>${mk(r.ok["均線"])} MA${C["均線天數"]}　${mk(r.ok.RSI)} RSI　${mk(r.ok.KD)} KD <span class="small">K ${fmt(r.k)}</span></span>
+      <span class="k">訊號</span><span>${sigHtml(r)}</span></div>`;
+    c.onclick = () => { select(c); drawItem(r); };
+    mkEl.appendChild(c);
+  });
+  if (M.chips) {
+    const ch = M.chips, cb = document.getElementById("cb"), lv = a => a[a.length - 1];
+    [["外資現貨買賣超（億元）", ch.foreign.length ? lv(ch.foreign)[1] : null, null, ch.lights.foreign, ch.foreign],
+     ["融資餘額（億元）", ch.margin.length ? lv(ch.margin)[1] : null, ch.margin.length ? lv(ch.margin)[2] : null, ch.lights.margin, ch.margin.map(x => [x[0], x[2]])],
+     ["外資台指期淨未平倉（口）", ch.futures.length ? lv(ch.futures)[1] : null, ch.futures.length ? lv(ch.futures)[2] : null, ch.lights.futures, ch.futures.map(x => [x[0], x[2]])]]
+    .forEach(([name, v, chg, light, hist]) => {
+      const tr = document.createElement("tr"), d = hist.length ? lv(hist)[0] : "";
+      tr.innerHTML = `<td>${name}<br><span class="small">${d}</span></td><td class="num">${fmt(v)}</td><td class="num ${cls(chg)}">${chg == null ? "—" : sign(chg)}</td><td style="font-size:18px">${light}</td>
+        <td>${hist.slice(-5).map(([dd, x]) => `<span class="small">${dd.slice(5).replace("-", "/")}</span> <span class="${cls(x)}">${sign(x)}</span>`).join("　")}</td>`;
+      cb.appendChild(tr);
+    });
+  }
+  if (hasHold) {
+    const hb = document.getElementById("hb");
+    D.results.forEach(r => {
+      if (!r.holding) return;
+      const hd = r.holding, tr = document.createElement("tr"); tr.className = "row";
+      tr.innerHTML = `<td><b>${r.id}</b> ${r.name}</td><td class="num">${fmt(r.close)}</td><td class="num">${hd.cost == null ? "—" : fmt(hd.cost)}</td>
+        <td class="num ${cls(hd.ret)}">${hd.ret == null ? "—" : sign(hd.ret) + "%"}</td><td>${sigHtml(r)}</td>
+        <td>${lvTxt(r.res[0])}</td><td>${lvTxt(r.res[1])}</td><td>${lvTxt(r.sup[0])}</td><td>${lvTxt(r.sup[1])}</td>`;
+      tr.onclick = () => { select(tr); drawItem(r); document.getElementById("cv").scrollIntoView({ behavior: "smooth", block: "center" }); };
+      hb.appendChild(tr);
+    });
+  }
+  const tb = document.getElementById("tb");
+  D.results.forEach(r => {
+    const tr = document.createElement("tr"); tr.className = "row";
+    const rev = r.rev ? `<span class="${cls(r.rev.yoy)}">${r.rev.yoy == null ? "—" : sign(r.rev.yoy) + "%"}</span> <span class="small">${r.rev.label}</span>` : "—";
+    const eps = r.eps ? `${r.eps.eps} <span class="small">${r.eps.label}${r.eps.prev != null ? "・去年 " + r.eps.prev : ""}</span>` : "—";
+    tr.innerHTML = `<td><b>${r.id}</b> ${r.name}</td><td class="num">${fmt(r.close)}</td><td class="num ${cls(r.chg)}">${sign(r.chg)}</td>
+      <td>${mk(r.ok["均線"])} <span class="small">${fmt(r.ma)}</span></td><td>${mk(r.ok.RSI)} <span class="small">${fmt(r.rsi_s)} / ${fmt(r.rsi_l)}</span></td>
+      <td>${mk(r.ok.KD)} <span class="small">${fmt(r.k)} / ${fmt(r.d)}</span></td><td>${mk(r.ok["外資"])} <span class="small">${r.foreign.map(sign).join("、")}</span></td>
+      <td>${mk(r.ok["融資"])} <span class="small">${sign(r.margin_chg)}</span></td><td class="num">${rev}</td><td class="num">${eps}</td><td>${r.pass ? '<span class="pass">符合</span>' : ""}</td>`;
+    tr.onclick = () => { select(tr); drawItem(r); document.getElementById("cv").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    tb.appendChild(tr);
+  });
+  document.getElementById("lg").innerHTML = "<span>K 線紅漲綠跌</span>" + C["顯示均線"].map(n => `<span><i style="background:${MAC[n] || "#555"}"></i>MA${n}</span>`).join("") +
+    `<span><i style="background:repeating-linear-gradient(90deg,#d6453d 0 4px,transparent 4px 7px)"></i>壓力</span><span><i style="background:repeating-linear-gradient(90deg,#1f9d55 0 4px,transparent 4px 7px)"></i>支撐</span><span><i style="background:repeating-linear-gradient(90deg,#555 0 4px,transparent 4px 7px)"></i>成本</span>` +
+    `<span><i style="background:#d6453d"></i>RSI${C["RSI短"]}／K${C["K天數"]}</span><span><i style="background:#2f5d8a"></i>RSI${C["RSI長"]}／D${C["D天數"]}</span>`;
+  const firstCard = mkEl.firstChild;
+  if (M.indexes[0]) { select(firstCard); drawItem(M.indexes[0]); } else if (D.results[0]) { select(tb.firstChild); drawItem(D.results[0]); }
+}
+function select(el) { document.querySelectorAll(".card,tr.row").forEach(x => x.classList.toggle("sel", x === el)); }
+function line(g, arr, x, y, color) {
+  g.strokeStyle = color; g.lineWidth = 1.6; g.beginPath(); let st = false;
+  arr.forEach((v, k) => { if (v == null) return; st ? g.lineTo(x(k), y(v)) : g.moveTo(x(k), y(v)); st = true; });
+  g.stroke(); g.lineWidth = 1;
+}
+function drawItem(r) {
+  CUR = r;
+  document.getElementById("ctitle").textContent = `${r.id} ${r.name}　近 ${r.candles.length} 個交易日`;
+  const cv = document.getElementById("cv"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth;
+  const P = { top: 8, ph: 260, fy: 284, fh: 64, ry: 372, rh: 76, ky: 466, kh: 76 }, H = 562;
+  cv.style.height = H + "px"; cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  const L = 6, R = 54, n = r.candles.length, step = (W - L - R) / n, bw = Math.max(1.5, step * 0.6), x = k => L + step * k + step / 2;
+  const mv = Object.values(r.ma_lines).flat().filter(v => v != null);
+  const marks = [...r.res.map(l => [l.price, "#d6453d", "壓 " + l.price]), ...r.sup.map(l => [l.price, "#1f9d55", "撐 " + l.price])];
+  mv.push(...marks.map(m => m[0]));
+  const hi = Math.max(...r.candles.map(c => c[2]), ...mv), lo = Math.min(...r.candles.map(c => c[3]), ...mv);
+  const y = v => P.top + (hi - v) / (hi - lo || 1) * P.ph;
+  g.font = "11px -apple-system,sans-serif";
+  const grid = (yy, label) => { g.strokeStyle = "#eeeeea"; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - R, yy); g.stroke(); g.fillStyle = "#6b7478"; g.fillText(label, W - R + 5, yy + 4); };
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4; grid(y(v), v >= 1000 ? Math.round(v).toString() : v.toFixed(1)); }
+  r.candles.forEach((c, k) => {
+    const up = c[4] >= c[1]; g.strokeStyle = g.fillStyle = up ? "#d6453d" : "#1f9d55";
+    g.beginPath(); g.moveTo(x(k), y(c[2])); g.lineTo(x(k), y(c[3])); g.stroke();
+    const y1 = y(Math.max(c[1], c[4])), y2 = y(Math.min(c[1], c[4])); g.fillRect(x(k) - bw / 2, y1, bw, Math.max(1, y2 - y1));
+  });
+  Object.entries(r.ma_lines).forEach(([nn, arr]) => line(g, arr, x, y, MAC[nn] || "#555"));
+  const cost = r.holding && r.holding.cost;
+  if (cost) {
+    if (cost <= hi && cost >= lo) marks.push([cost, "#555", "成本 " + cost]);
+    else { g.fillStyle = "#555"; g.font = "bold 11px -apple-system,sans-serif"; g.fillText(`成本 ${cost} ${cost > hi ? "↑" : "↓"}`, L + 4, cost > hi ? P.top + 12 : P.top + P.ph - 4); }
+  }
+  const used = [];
+  marks.sort((a, b) => b[0] - a[0]).forEach(([v, col, lab]) => {
+    const yy = y(v);
+    g.save(); g.setLineDash([5, 4]); g.strokeStyle = col; g.lineWidth = 1.2; g.beginPath(); g.moveTo(L, yy); g.lineTo(W - R, yy); g.stroke(); g.restore();
+    let ty = yy - 3; while (used.some(u => Math.abs(u - ty) < 12)) ty += 12; used.push(ty);
+    g.font = "bold 11px -apple-system,sans-serif"; const tw = g.measureText(lab).width;
+    g.fillStyle = "rgba(255,255,255,.85)"; g.fillRect(L + 2, ty - 10, tw + 4, 13); g.fillStyle = col; g.fillText(lab, L + 4, ty);
+  });
+  g.font = "11px -apple-system,sans-serif";
+  const fmap = Object.fromEntries(r.f_series), fv = r.candles.map(c => fmap[c[0]] || 0), fm = Math.max(1, ...fv.map(Math.abs)), mid = P.fy + P.fh / 2;
+  g.fillStyle = "#6b7478"; g.fillText(r.f_unit ? "外資億" : "外資", W - R + 5, mid + 4);
+  fv.forEach((v, k) => { const hh = v / fm * (P.fh / 2); g.fillStyle = v >= 0 ? "#d6453d" : "#1f9d55"; g.fillRect(x(k) - bw / 2, v >= 0 ? mid - hh : mid, bw, Math.abs(hh)); });
+  [[P.ry, P.rh, r.rsi_lines, "RSI"], [P.ky, P.kh, r.kd_lines, "KD"]].forEach(([oy, oh, ls, name]) => {
+    const yy = v => oy + (100 - v) / 100 * oh;
+    grid(yy(80), "80"); grid(yy(20), "20"); g.fillStyle = "#6b7478"; g.fillText(name, W - R + 5, yy(50) + 4);
+    line(g, ls[0], x, yy, "#d6453d"); line(g, ls[1], x, yy, "#2f5d8a");
+  });
+  g.fillStyle = "#6b7478"; g.fillText(r.candles[0][0], L, H - 3);
+  const lastD = r.candles[n - 1][0]; g.fillText(lastD, W - R - g.measureText(lastD).width, H - 3);
+}
+window.addEventListener("resize", () => CUR && drawItem(CUR));
+
+/* ---------- 設定 ---------- */
+const $ = id => document.getElementById(id);
+function listToText(list) { return list.map(x => [x.id, x.shares || "", x.cost || ""].join(" ").trim()).join("\n"); }
+function textToList(t) {
+  return t.split(/\n/).map(s => s.trim().split(/[\s,，]+/)).filter(a => /^[0-9A-Za-z]{4,6}$/.test(a[0] || ""))
+    .map(([id, sh, co]) => ({ id: id.toUpperCase(), shares: sh ? +sh : null, cost: co ? +co : null }));
+}
+function openSheet() {
+  const C = S.cond;
+  $("fTok").value = S.token; $("fList").value = listToText(S.list);
+  $("cMA").value = C["均線天數"]; $("cFB").value = C["外資連買天數"]; $("cRS").value = C["RSI短"]; $("cRL").value = C["RSI長"];
+  $("cK").value = C["K天數"]; $("cD").value = C["D天數"]; $("cMG").value = C["融資比較天數"];
+  $("cNeed").innerHTML = NEED_KEYS.map(([k, t]) => `<label><input type="checkbox" value="${k}" ${C["必要條件"].includes(k) ? "checked" : ""}>${t}</label>`).join("");
+  $("fCode").value = ""; $("sheet").classList.add("open");
+}
+function readSheet() {
+  const num = (id, d) => { const v = parseInt($(id).value, 10); return v > 0 ? v : d; };
+  return { token: $("fTok").value.trim(), list: textToList($("fList").value),
+    cond: Object.assign({}, S.cond, { "均線天數": num("cMA", 20), "外資連買天數": num("cFB", 3), "RSI短": num("cRS", 5), "RSI長": num("cRL", 10),
+      "K天數": num("cK", 5), "D天數": num("cD", 5), "融資比較天數": num("cMG", 5),
+      "必要條件": [...document.querySelectorAll("#cNeed input:checked")].map(i => i.value) }) };
+}
+$("bSet").onclick = openSheet;
+$("bCancel").onclick = () => $("sheet").classList.remove("open");
+$("bSave").onclick = () => { const v = readSheet(); S.token = v.token; S.list = v.list; S.cond = v.cond; store.set("settings", S); $("sheet").classList.remove("open"); runAll(); };
+$("bExp").onclick = () => { const v = readSheet(); $("fCode").value = "SP1:" + btoa(unescape(encodeURIComponent(JSON.stringify({ list: v.list, cond: v.cond })))); $("fCode").select(); };
+$("bImp").onclick = () => {
+  try {
+    const raw = $("fCode").value.trim().replace(/^SP1:/, "");
+    const v = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (v.list) $("fList").value = listToText(v.list);
+    if (v.cond) { S.cond = Object.assign({}, DEF_COND, v.cond); const tok = $("fTok").value, lst = $("fList").value; openSheet(); $("fTok").value = tok; $("fList").value = lst; }
+    alertBox("已匯入，確認後按「儲存」。");
+  } catch (e) { alertBox("設定碼格式不對，請重新複製。"); }
+};
+function alertBox(t) { $("fCode").value = t; }
+$("bRun").onclick = runAll;
+
+/* ---------- 啟動 ---------- */
+const last = store.get("lastData", null);
+if (last) render(last);
+else document.getElementById("main").innerHTML = `<div class="empty"><b>第一次使用</b><br>1. 按右上角「設定」，貼上 FinMind token。<br>2. 在「匯入／匯出設定碼」貼上設定碼並按「匯入」，或自己輸入觀察股。<br>3. 按「儲存」就會開始抓資料。<br><br>之後打開會先顯示上次的結果，按「更新」抓最新資料。</div>`;
+</script>
+</body>
+</html>
