@@ -144,6 +144,10 @@
   </div>
   <label>「符合」需要的條件</label>
   <div class="checks" id="cNeed"></div>
+  <label>智選股候選池（股號用空白隔開）</label>
+  <textarea id="fPool" style="min-height:90px"></textarea>
+  <div class="checks"><label><input type="checkbox" id="fNoFin">排除金融股</label></div>
+  <div class="small">候選池越大，掃描越久、越耗 FinMind 額度（每檔約 1 次查詢）。留空會使用預設的 55 檔大型股。</div>
   <label>匯入／匯出設定碼</label>
   <textarea id="fCode" style="min-height:80px" placeholder="把設定碼貼在這裡後按「匯入」"></textarea>
   <div class="btns"><button class="ghost" id="bExp">匯出</button><button class="ghost" id="bImp">匯入</button></div>
@@ -357,8 +361,8 @@ async function marketChips(start) {
   return { foreign, margin, futures, lights: { foreign: light("foreign", lv(foreign) && lv(foreign)[1]), margin: light("margin", lv(margin) && lv(margin)[2]), futures: light("futures", lv(futures) && lv(futures)[2]) } };
 }
 async function lookupNames(ids) {
-  const miss = ids.filter(id => !S.names[id]); if (!miss.length) return;
-  try { (await fetchDS("TaiwanStockInfo", "", "2000-01-01")).forEach(r => { if (!S.names[r.stock_id]) S.names[r.stock_id] = r.stock_name; }); store.set("settings", S); } catch (e) {}
+  const miss = ids.filter(id => !S.names[id] || !(S.ind || {})[id]); if (!miss.length) return;
+  try { S.ind = S.ind || {}; (await fetchDS("TaiwanStockInfo", "", "2000-01-01")).forEach(r => { if (!S.names[r.stock_id]) S.names[r.stock_id] = r.stock_name; if (r.industry_category && !S.ind[r.stock_id]) S.ind[r.stock_id] = r.industry_category; }); store.set("settings", S); } catch (e) {}
 }
 async function fetchStock(x, C) {
   const start = ago(400);
@@ -611,6 +615,7 @@ function openSheet() {
   $("cMA").value = C["均線天數"]; $("cFB").value = C["外資連買天數"]; $("cRS").value = C["RSI短"]; $("cRL").value = C["RSI長"];
   $("cK").value = C["K天數"]; $("cD").value = C["D天數"]; $("cMG").value = C["融資比較天數"];
   $("cNeed").innerHTML = NEED_KEYS.map(([k, t]) => `<label><input type="checkbox" value="${k}" ${C["必要條件"].includes(k) ? "checked" : ""}>${t}</label>`).join("");
+  $("fPool").value = S.pool || DEF_POOL; $("fNoFin").checked = !!S.noFin;
   $("fCode").value = ""; $("sheet").classList.add("open");
 }
 function readSheet() {
@@ -622,7 +627,10 @@ function readSheet() {
 }
 $("bSet").onclick = openSheet;
 $("bCancel").onclick = () => $("sheet").classList.remove("open");
-$("bSave").onclick = () => { const v = readSheet(); S.token = v.token; S.list = v.list; S.cond = v.cond; store.set("settings", S); $("sheet").classList.remove("open"); runAll(); };
+$("bSave").onclick = () => { const v = readSheet(); S.token = v.token; S.list = v.list; S.cond = v.cond;
+  const np = $("fPool").value.trim(), nf = $("fNoFin").checked;
+  if ((np || DEF_POOL) !== (S.pool || DEF_POOL) || nf !== !!S.noFin) store.set("picks", null);
+  S.pool = np && np !== DEF_POOL ? np : null; S.noFin = nf; store.set("settings", S); $("sheet").classList.remove("open"); runAll(); };
 $("bExp").onclick = () => { const v = readSheet(); $("fCode").value = "SP1:" + btoa(unescape(encodeURIComponent(JSON.stringify({ list: v.list, cond: v.cond })))); $("fCode").select(); };
 $("bImp").onclick = () => {
   try {
@@ -668,7 +676,11 @@ async function scanPicks() {
       return { id, t, vol20 };
     } catch (e) { return null; }
   }), 4, (d, n) => setStatus(`掃描候選池… ${d} / ${n}`));
-  const ranked = scored.filter(x => x && x.t.core && x.vol20 > 3e8).sort((a, b) => b.t.score - a.t.score || b.t.ret20 - a.t.ret20).slice(0, 5);
+  const isFin = id => /金融|保險/.test((S.ind || {})[id] || "");
+  const cands = scored.filter(x => x && x.t.core && x.t.score >= 7 && x.vol20 > 3e8 && !(S.noFin && isFin(x.id)))
+    .sort((a, b) => b.t.ret20 - a.t.ret20 || b.t.score - a.t.score);
+  const seen = {}, ranked = [];
+  for (const x of cands) { const ind = (S.ind || {})[x.id] || x.id; if (seen[ind]) continue; seen[ind] = 1; ranked.push(x); if (ranked.length >= 5) break; }
   setStatus("抓取入選股票的完整資料…");
   const picks = (await pool(ranked.map(x => async () => { try { const r = await fetchStock({ id: x.id }, C); if (r) r.preview = true; return r; } catch (e) { return null; } }), 3)).filter(Boolean);
   const out = { day: today, at: stamp(), scanned: ids.length, passed: scored.filter(x => x && x.t.core).length, picks };
@@ -678,12 +690,12 @@ async function scanPicks() {
 async function renderPicks(force) {
   const el = $("tab2");
   const cache = store.get("picks", null);
-  const head = (c) => `<h3>智選股</h3><div class="sub">從 ${c ? c.scanned : poolIds().length} 檔大型股候選池中，依趨勢規則每天篩一次，取分數最高的 3～5 檔。核心條件：站上月線、月線在季線之上、月線上揚，並排除 20 日平均成交金額低於 3 億的股票。這是依固定規則篩出的技術面結果，不是推薦買進。</div>
+  const head = (c) => `<h3>智選股</h3><div class="sub">從 ${c ? c.scanned : poolIds().length} 檔候選池中，每天篩一次。先要求站上月線、月線在季線之上、月線上揚，趨勢分數至少 7 分，20 日平均成交金額 3 億以上；再依 20 日漲幅由強到弱排序，每個產業最多 1 檔，取前 5 檔${S.noFin ? "（已排除金融股）" : ""}。這是依固定規則篩出的技術面結果，不是推薦買進。候選池可在「設定」修改。</div>
     <div class="btns" style="margin-top:6px"><button class="ghost" id="bScan">${c ? "重新掃描（約 80 次查詢）" : "開始掃描"}</button></div>`;
   const draw = c => {
     if (!c) { el.innerHTML = head(null); $("bScan").onclick = () => renderPicks(true); return; }
     el.innerHTML = head(c) + `<div class="sub">${c.day === iso(new Date()) ? "今天" : "上次"} ${c.at} 掃描・${c.passed} 檔通過核心條件${c.picks.length ? "" : "，今天沒有符合的股票"}</div>` +
-      c.picks.map((r, i) => `<div class="pick"><div class="hd"><span class="nm">${r.id} ${r.name}</span><span>${fmt(r.close)}</span><span class="${cls(r.chg)}">${sign(r.chg)}</span><span class="small">趨勢分數 ${r.trend.score}/9・20 日 ${r.trend.ret20 > 0 ? "+" : ""}${r.trend.ret20}%</span></div>
+      c.picks.map((r, i) => `<div class="pick"><div class="hd"><span class="nm">${r.id} ${r.name}</span><span>${fmt(r.close)}</span><span class="${cls(r.chg)}">${sign(r.chg)}</span><span class="small">${(S.ind || {})[r.id] || ""}・趨勢分數 ${r.trend.score}/9・20 日 ${r.trend.ret20 > 0 ? "+" : ""}${r.trend.ret20}%</span></div>
         <div style="margin-top:6px">${r.trend.checks.map(([t, ok]) => `<span class="tag ${ok ? "" : "no"}">${t}</span>`).join("")}</div>
         <div class="row2" style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin-top:8px"><span class="small">壓力</span><span>${lvTxt(r.res[0])}</span><span class="small">支撐</span><span>${lvTxt(r.sup[0])}</span>
         <span class="small">籌碼</span><span>外資 ${r.foreign.map(sign).join("、") || "—"}・融資 ${sign(r.margin_chg)}</span><span class="small">基本面</span><span>月營收年增 ${r.rev && r.rev.yoy != null ? sign(r.rev.yoy) + "%" : "—"}・EPS ${r.eps ? r.eps.eps + "（" + r.eps.label + "）" : "—"}</span></div>
