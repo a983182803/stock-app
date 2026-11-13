@@ -158,7 +158,7 @@
 
 <script>
 "use strict";
-const APP_VER = "2026.11.12-5";
+const APP_VER = "2026.11.13-1";
 const API = "https://api.finmindtrade.com/api/v4/data";
 const DEF_COND = { "均線天數": 20, "顯示均線": [5, 10, 20, 60], "RSI短": 5, "RSI長": 10, "K天數": 5, "D天數": 5, "外資連買天數": 3, "融資比較天數": 5, "必要條件": ["RSI", "KD", "均線"] };
 const NEED_KEYS = [["均線", "站上均線"], ["RSI", "RSI 短>長"], ["KD", "K>D"], ["外資", "外資連買"], ["融資", "融資減少"]];
@@ -723,14 +723,38 @@ async function scanPicks() {
   store.set("picks", out); setStatus("");
   return out;
 }
+async function loadMarketPicks() {
+  try {
+    const r = await fetch("picks.json?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) return null;
+    const js = await r.json(); if (!js || !Array.isArray(js.cands)) return null;
+    const age = (Date.now() - new Date(js.day + "T00:00:00+08:00").getTime()) / 864e5; if (age > 4) return null;
+    return js;
+  } catch (e) { return null; }
+}
+async function marketPicks(force) {
+  const mp = await loadMarketPicks(); if (!mp) return null;
+  const cache = store.get("picksFull", null), key = mp.at + "|" + (S.noFin ? 1 : 0);
+  if (cache && cache.key === key && !force) return cache;
+  if (!S.token) { openSheet(); setStatus("請先在設定貼上 FinMind token。", true); return null; }
+  const isFin = c => /金融|保險/.test(c.ind || "");
+  const seen = {}, chosen = [];
+  for (const c of mp.cands) { if (S.noFin && isFin(c)) continue; if (seen[c.ind]) continue; seen[c.ind] = 1; chosen.push(c); if (chosen.length >= 5) break; }
+  setStatus("抓取入選股票的完整資料…");
+  chosen.forEach(c => { S.names[c.id] = S.names[c.id] || c.name; (S.ind = S.ind || {})[c.id] = c.ind; });
+  const picks = (await pool(chosen.map(c => async () => { try { const r = await fetchStock({ id: c.id }, S.cond); if (r) r.preview = true; return r; } catch (e) { return null; } }), 3)).filter(Boolean);
+  setStatus("");
+  const out = { key, full: true, day: mp.day, at: mp.at, scanned: mp.scanned, universe: mp.universe, passed: mp.passed, picks };
+  store.set("picksFull", out); return out;
+}
 async function renderPicks(force) {
   const el = $("tab2");
   const cache = store.get("picks", null);
-  const head = (c) => `<h3>智選股</h3><div class="sub">從 ${c ? c.scanned : poolIds().length} 檔候選池中，每天篩一次。先要求站上月線、月線在季線之上、月線上揚，趨勢分數至少 7 分，20 日平均成交金額 3 億以上；再依 20 日漲幅由強到弱排序，每個產業最多 1 檔，取前 5 檔${S.noFin ? "（已排除金融股）" : ""}。這是依固定規則篩出的技術面結果，不是推薦買進。候選池可在「設定」修改。</div>
+  const head = (c) => c && c.full ? `<h3>智選股・全市場</h3><div class="sub">Mac mini 每晚掃描全部上市櫃 ${c.universe} 檔（本次掃描 ${c.scanned} 檔），先要求站上月線、月線在季線之上、月線上揚，趨勢分數至少 7 分，20 日平均成交金額 3 億以上；再依 20 日漲幅由強到弱排序，每個產業最多 1 檔，取前 5 檔${S.noFin ? "（已排除金融股）" : ""}。這是依固定規則篩出的技術面結果，不是推薦買進。</div>
+    <div class="btns" style="margin-top:6px"><button class="ghost" id="bScan">改用候選池掃描（約 80 次查詢）</button></div>` : `<h3>智選股</h3><div class="sub">從 ${c ? c.scanned : poolIds().length} 檔候選池中，每天篩一次。先要求站上月線、月線在季線之上、月線上揚，趨勢分數至少 7 分，20 日平均成交金額 3 億以上；再依 20 日漲幅由強到弱排序，每個產業最多 1 檔，取前 5 檔${S.noFin ? "（已排除金融股）" : ""}。這是依固定規則篩出的技術面結果，不是推薦買進。候選池可在「設定」修改。</div>
     <div class="btns" style="margin-top:6px"><button class="ghost" id="bScan">${c ? "重新掃描（約 80 次查詢）" : "開始掃描"}</button></div>`;
   const draw = c => {
     if (!c) { el.innerHTML = head(null); $("bScan").onclick = () => renderPicks(true); return; }
-    el.innerHTML = head(c) + `<div class="sub">${c.day === iso(new Date()) ? "今天" : "上次"} ${c.at} 掃描・${c.passed} 檔通過核心條件${c.picks.length ? "" : "，今天沒有符合的股票"}</div>` +
+    el.innerHTML = head(c) + `<div class="sub">${c.full ? "全市場" : ""}${c.day === iso(new Date()) ? "今天" : "上次"} ${c.at} 掃描・${c.passed} 檔通過核心條件${c.picks.length ? "" : "，今天沒有符合的股票"}</div>` +
       c.picks.map((r, i) => `<div class="pick"><div class="hd"><span class="nm">${r.id} ${r.name}</span><span>${fmt(r.close)}</span><span class="${cls(r.chg)}">${sign(r.chg)}</span><span class="small">${(S.ind || {})[r.id] || ""}・趨勢分數 ${r.trend.score}/9・20 日 ${r.trend.ret20 > 0 ? "+" : ""}${r.trend.ret20}%</span></div>
         <div style="margin-top:6px">${r.trend.checks.map(([t, ok]) => `<span class="tag ${ok ? "" : "no"}">${t}</span>`).join("")}</div>
         <div class="row2" style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin-top:8px"><span class="small">關鍵壓力</span><span>${lvTxt(r.res[0])}</span><span class="small">關鍵支撐</span><span>${lvTxt(r.sup[0])}</span>
@@ -741,8 +765,13 @@ async function renderPicks(force) {
     el.querySelectorAll("[data-chart]").forEach(b => b.onclick = () => { showTab("1"); if (!$("cv")) render(currentData()); const r = c.picks[+b.dataset.chart]; r.preview = !S.list.some(x => x.id === r.id); select(null); drawItem(r); $("cv").scrollIntoView({ behavior: "smooth", block: "start" }); });
     el.querySelectorAll("[data-add]").forEach(b => b.onclick = async () => { if (S.list.some(x => x.id === b.dataset.add)) return; await addStock(b.dataset.add); b.textContent = "已在觀察名單"; });
   };
+  // 先用 Mac mini 每晚的全市場結果；沒有才用候選池掃描
+  try {
+    const full = await marketPicks(force === "full");
+    if (full && force !== true) { draw(full); return; }
+  } catch (e) {}
   draw(cache);
-  if (force || !cache) { try { draw(await scanPicks()); } catch (e) { setStatus("掃描失敗：" + e.message, true); } }
+  if (force === true || !cache) { try { draw(await scanPicks()); } catch (e) { setStatus("掃描失敗：" + e.message, true); } }
 }
 
 /* ---------- 每日新聞 ---------- */
